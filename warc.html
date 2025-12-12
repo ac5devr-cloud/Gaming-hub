@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>90s Arcade Checkers - AI Strategic FIX</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Global Styles - 90s Arcade Theme */
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #000033; 
+            color: #ccff00; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            font-size: 10px;
+        }
+
+        h1 { 
+            text-shadow: 2px 2px #ff00ff;
+            margin-bottom: 15px; 
+            font-size: 1.5rem;
+        }
+        
+        /* Game Mode Selector */
+        .mode-selector {
+            margin: 10px 0;
+            padding: 10px;
+            border: 2px solid #00ffff;
+            background-color: #1a004d;
+        }
+
+        .mode-selector button {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #ff00ff;
+            color: #ccff00;
+            border: 2px solid #ccff00;
+            padding: 5px 10px;
+            margin: 0 5px;
+            cursor: pointer;
+            box-shadow: 3px 3px #00ffff;
+            transition: all 0.1s;
+        }
+
+        .mode-selector button.active {
+            background-color: #00ffff;
+            color: #000033;
+            box-shadow: 3px 3px #ff00ff;
+        }
+
+        .status {
+            margin-bottom: 15px;
+            font-size: 0.8rem;
+            color: #00ffff;
+            height: 20px;
+            text-align: center;
+        }
+
+        /* Board Styles 8x8 */
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 45px);
+            grid-template-rows: repeat(8, 45px);
+            gap: 0;
+            border: 5px solid #ff00ff; 
+            box-shadow: 0 0 20px #ff00ff, 0 0 10px #00ffff;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .cell {
+            width: 45px;
+            height: 45px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            transition: background-color 0.1s;
+        }
+
+        .light { background-color: #333333; } 
+        .dark { background-color: #00004d; } 
+        
+        .highlight {
+            box-shadow: inset 0 0 0 3px #ccff00; 
+            background-color: #330066 !important;
+        }
+        
+        .cell:hover:not(.highlight) {
+            background-color: #1a004d;
+        }
+
+        /* Piece Styles */
+        .piece {
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            text-shadow: 1px 1px black;
+            transition: transform 0.1s;
+        }
+
+        .player1 { background-color: #ff00ff; color: #ccff00; } 
+        .player2 { background-color: #00ffff; color: #000033; } 
+
+        .king {
+            border: 3px solid #ccff00; 
+            font-size: 1.8rem;
+            transform: scale(1.1);
+        }
+        
+        /* Reset Button */
+        .btn-reset {
+            font-family: 'Press Start 2P', cursive;
+            padding: 10px 20px;
+            font-size: 0.8rem;
+            background-color: #00ffff;
+            color: #000033;
+            border: 2px solid #ff00ff;
+            border-radius: 0;
+            cursor: pointer;
+            box-shadow: 4px 4px #ff00ff;
+            margin-top: 15px;
+        }
+
+        .btn-reset:hover {
+            background-color: #33ffff;
+            box-shadow: 2px 2px #ff00ff;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>ARCADE CHECKERS</h1>
+    
+    <div class="mode-selector">
+        <button id="mode-player" onclick="setGameMode(false)">TWO PLAYERS</button>
+        <button id="mode-ai" onclick="setGameMode(true)">PLAY VS AI</button>
+    </div>
+
+    <div class="status" id="status">SELECT MODE!</div>
+
+    <div class="board" id="board">
+        </div>
+
+    <button class="btn-reset" onclick="resetGame()">RESET GAME</button>
+
+    <script>
+        let boardState = []; 
+        let currentPlayer = 1; 
+        let selectedPiece = null; 
+        const BOARD_SIZE = 8;
+        let mustJump = false; 
+        let playVsAI = false; 
+        let gameActive = false;
+
+        const board = document.getElementById('board');
+        const statusText = document.getElementById('status');
+        
+        // --- INITIALIZATION & SETUP ---
+        function setGameMode(isAI) {
+            playVsAI = isAI;
+            document.getElementById('mode-player').classList.remove('active');
+            document.getElementById('mode-ai').classList.remove('active');
+            
+            if (isAI) {
+                document.getElementById('mode-ai').classList.add('active');
+            } else {
+                document.getElementById('mode-player').classList.add('active');
+            }
+            resetGame();
+            gameActive = true;
+        }
+
+        function initBoard() {
+            board.innerHTML = '';
+            boardState = Array(BOARD_SIZE).fill(0).map(() => Array(BOARD_SIZE).fill(null));
+
+            for (let i = 0; i < BOARD_SIZE; i++) {
+                for (let j = 0; j < BOARD_SIZE; j++) {
+                    const index = i * BOARD_SIZE + j;
+                    const cell = document.createElement('div');
+                    cell.className = 'cell ' + (((i + j) % 2 === 0) ? 'light' : 'dark');
+                    cell.setAttribute('data-index', index);
+                    cell.removeEventListener('click', handleCellClick);
+                    cell.addEventListener('click', handleCellClick);
+                    board.appendChild(cell);
+
+                    if ((i + j) % 2 !== 0) {
+                        if (i < 3) {
+                            boardState[i][j] = { player: 2, isKing: false }; 
+                            renderPiece(cell, boardState[i][j]);
+                        } else if (i > 4) {
+                            boardState[i][j] = { player: 1, isKing: false }; 
+                            renderPiece(cell, boardState[i][j]);
+                        }
+                    }
+                }
+            }
+            
+            mustJump = checkMandatoryJumps();
+            statusText.textContent = `Turn: Player 1 (Pink)`;
+        }
+
+        function renderPiece(cell, piece) {
+            cell.innerHTML = '';
+            if (piece) {
+                const pieceDiv = document.createElement('div');
+                pieceDiv.className = `piece player${piece.player} ${piece.isKing ? 'king' : ''}`;
+                pieceDiv.textContent = piece.isKing ? 'K' : 'O'; 
+                cell.appendChild(pieceDiv);
+            }
+        }
+
+        function getCoords(index) {
+            return { row: Math.floor(index / BOARD_SIZE), col: index % BOARD_SIZE };
+        }
+
+        function getIndex(row, col) {
+            return row * BOARD_SIZE + col;
+        }
+        
+        // --- MOVE EXECUTION (Used by Player and AI) ---
+        function executeMove(moveData) {
+            const { startR, startC, endR, endC, isJump } = moveData;
+            
+            // 1. Wykonanie Bicia
+            if (isJump) {
+                // Obliczenie współrzędnych zbitego pionka
+                const capturedR = (startR + endR) / 2;
+                const capturedC = (startC + endC) / 2;
+
+                boardState[capturedR][capturedC] = null;
+                document.querySelector(`.cell[data-index='${getIndex(capturedR, capturedC)}']`).innerHTML = '';
+            }
+
+            // 2. Przesunięcie pionka
+            const pieceToMove = boardState[startR][startC];
+            boardState[endR][endC] = pieceToMove;
+            boardState[startR][startC] = null;
+            
+            // 3. Promocja na Damę
+            if ((currentPlayer === 1 && endR === 0) || (currentPlayer === 2 && endR === BOARD_SIZE - 1)) {
+                boardState[endR][endC].isKing = true;
+            }
+
+            // 4. Renderowanie na planszy
+            const endCell = document.querySelector(`.cell[data-index='${getIndex(endR, endC)}']`);
+            const startCell = document.querySelector(`.cell[data-index='${getIndex(startR, startC)}']`);
+            renderPiece(endCell, boardState[endR][endC]);
+            startCell.innerHTML = '';
+            
+            // 5. Sprawdzenie kontynuacji bicia
+            if (isJump) {
+                const jumpsAvailable = getJumps(endR, endC, pieceToMove).length > 0;
+                
+                if (jumpsAvailable) {
+                    // Wymuś kontynuację: ustaw nowy pionek jako selected
+                    selectedPiece = getIndex(endR, endC);
+                    clearHighlights();
+                    endCell.classList.add('highlight');
+                    highlightJumpsOnly(endR, endC, boardState[endR][endC]);
+                    statusText.textContent = `Player ${currentPlayer}. MUST JUMP AGAIN!`;
+                    
+                    // Jeśli to ruch AI, wywołaj AI ponownie, aby wykonała drugi skok
+                    if (playVsAI && currentPlayer === 2) {
+                        // Małe opóźnienie, aby wizualnie zobaczyć pierwszy skok
+                        setTimeout(makeAIMove, 700); 
+                    }
+                    return; 
+                }
+            }
+
+            // Jeśli nie ma kontynuacji, resetuj stan wyboru
+            selectedPiece = null;
+        }
+
+
+        // --- GAME LOGIC (Player Interaction) ---
+        function handleCellClick(e) {
+            if (!gameActive || (playVsAI && currentPlayer === 2)) return;
+
+            const cell = e.currentTarget;
+            const index = parseInt(cell.getAttribute('data-index'));
+            const { row, col } = getCoords(index);
+            const piece = boardState[row][col];
+            
+            // 1. Piece Selection
+            if (piece && piece.player === currentPlayer) {
+                clearHighlights();
+                selectedPiece = index;
+                cell.classList.add('highlight');
+                highlightValidMoves(row, col, piece);
+                return;
+            }
+
+            // 2. Move Execution
+            if (selectedPiece !== null && cell.classList.contains('highlight')) {
+                const { row: oldR, col: oldC } = getCoords(selectedPiece);
+                
+                // Wypakowanie danych ruchu dla wykonania
+                const moveData = {
+                    startR: oldR, startC: oldC,
+                    endR: row, endC: col,
+                    isJump: Math.abs(oldR - row) === 2,
+                };
+                
+                // Sprawdzenie, czy to prosty ruch, gdy bicie jest obowiązkowe
+                if (!moveData.isJump && mustJump) {
+                    clearHighlights();
+                    selectedPiece = null;
+                    statusText.textContent = `Turn: Player ${currentPlayer}. MANDATORY JUMP!`;
+                    return;
+                }
+
+                executeMove(moveData);
+                
+                // Po wykonaniu ruchu, jeśli nie było wymuszonej kontynuacji, przełączamy turę
+                if (selectedPiece === null) {
+                     clearHighlights();
+                     switchTurn();
+                }
+            } 
+            // 3. Clicked outside valid move
+            else {
+                clearHighlights();
+                selectedPiece = null;
+            }
+        }
+
+
+        function highlightValidMoves(r, c, piece) {
+            if (mustJump) {
+                highlightJumpsOnly(r, c, piece);
+                return;
+            }
+            
+            getMoves(r, c, piece).forEach(move => {
+                document.querySelector(`.cell[data-index='${getIndex(move.endR, move.endC)}']`).classList.add('highlight');
+            });
+
+            getJumps(r, c, piece).forEach(jump => {
+                document.querySelector(`.cell[data-index='${getIndex(jump.endR, jump.endC)}']`).classList.add('highlight');
+            });
+        }
+        
+        function highlightJumpsOnly(r, c, piece) {
+            getJumps(r, c, piece).forEach(jump => {
+                document.querySelector(`.cell[data-index='${getIndex(jump.endR, jump.endC)}']`).classList.add('highlight');
+            });
+        }
+
+        // --- MOVE HELPERS (Core Logic for Moves and Jumps) ---
+        function getMoves(r, c, piece, board) {
+            const moves = [];
+            const currentBoard = board || boardState;
+            const dir = (piece.player === 1) ? -1 : 1;
+            const directions = piece.isKing ? [-1, 1] : [dir];
+            
+            directions.forEach(d => {
+                const nextR = r + d;
+                [-1, 1].forEach(dc => {
+                    const nextC = c + dc;
+                    if (nextR >= 0 && nextR < BOARD_SIZE && nextC >= 0 && nextC < BOARD_SIZE) {
+                        if (!currentBoard[nextR][nextC]) {
+                            moves.push({ endR: nextR, endC: nextC, isJump: false });
+                        }
+                    }
+                });
+            });
+            return moves;
+        }
+
+        function getJumps(r, c, piece, board) {
+            const jumps = [];
+            const currentBoard = board || boardState;
+            const directions = piece.isKing ? [-1, 1] : [(piece.player === 1) ? -1 : 1];
+            
+            directions.forEach(dr => {
+                [-1, 1].forEach(dc => {
+                    const jumpedR = r + dr;
+                    const jumpedC = c + dc;
+                    const jumpR = r + dr * 2;
+                    const jumpC = c + dc * 2;
+
+                    if (jumpR >= 0 && jumpR < BOARD_SIZE && jumpC >= 0 && jumpC < BOARD_SIZE && !currentBoard[jumpR][jumpC]) {
+                        const jumpedPiece = currentBoard[jumpedR] && currentBoard[jumpedR][jumpedC];
+                        if (jumpedPiece && jumpedPiece.player !== piece.player) {
+                            jumps.push({ endR: jumpR, endC: jumpC, capturedR: jumpedR, capturedC: jumpedC, isJump: true });
+                        }
+                    }
+                });
+            });
+            return jumps;
+        }
+        
+        function checkMandatoryJumps() {
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const piece = boardState[r][c];
+                    if (piece && piece.player === currentPlayer) {
+                        if (getJumps(r, c, piece).length > 0) {
+                            statusText.textContent = `Turn: Player ${currentPlayer}. MANDATORY JUMP!`;
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        // --- AI LOGIC (Enhanced Strategy and Execution Fix) ---
+        function makeAIMove() {
+            if (!gameActive || currentPlayer !== 2) return;
+
+            const aiPlayer = 2;
+            const opponentPlayer = 1;
+            let movesWithScores = [];
+
+            // Jeśli AI ma już wybrany pionek (po skoku), niech skacze dalej.
+            if (selectedPiece !== null) {
+                const { row: currentR, col: currentC } = getCoords(selectedPiece);
+                const currentPiece = boardState[currentR][currentC];
+
+                // Znajdź dostępne skoki dla aktualnie wybranego pionka (po poprzednim biciu)
+                const continuedJumps = getJumps(currentR, currentC, currentPiece);
+                if (continuedJumps.length > 0) {
+                    // Wybierz losowo najlepszy skok kontynuacyjny
+                    const finalMove = continuedJumps[Math.floor(Math.random() * continuedJumps.length)];
+                    finalMove.startR = currentR;
+                    finalMove.startC = currentC;
+                    finalMove.isJump = true;
+
+                    // Wykonaj ruch po opóźnieniu
+                    setTimeout(() => {
+                        executeMove(finalMove);
+                        if (selectedPiece === null) {
+                            clearHighlights();
+                            switchTurn();
+                        }
+                    }, 700);
+                    return;
+                }
+            }
+
+            // 1. Collect and Score all available moves (tylko jeśli nie ma kontynuacji bicia)
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const piece = boardState[r][c];
+                    if (piece && piece.player === aiPlayer) {
+                        const possibleMoves = [...getJumps(r, c, piece), ...getMoves(r, c, piece)];
+                        
+                        possibleMoves.forEach(move => {
+                            if (move.isJump && mustJump || !mustJump) {
+                                // --- Start Simulation (Deep Copy) ---
+                                const tempBoard = JSON.parse(JSON.stringify(boardState));
+                                
+                                // Perform move on temp board
+                                tempBoard[move.endR][move.endC] = tempBoard[r][c];
+                                tempBoard[r][c] = null;
+                                
+                                if (move.isJump) {
+                                    tempBoard[move.capturedR][move.capturedC] = null;
+                                }
+
+                                // Check for promotion on temp board
+                                if (move.endR === BOARD_SIZE - 1) {
+                                    tempBoard[move.endR][move.endC].isKing = true;
+                                }
+                                
+                                let score = 0;
+                                
+                                // Priority 1: Jump/Capture 
+                                if (move.isJump) {
+                                    score += 100; 
+                                    // Check for continuous jumps 
+                                    if (getJumps(move.endR, move.endC, tempBoard[move.endR][move.endC], tempBoard).length > 0) {
+                                        score += 50; 
+                                    }
+                                }
+
+                                // Priority 2: Promotion
+                                if (move.endR === BOARD_SIZE - 1 && !tempBoard[move.endR][move.endC].isKing) {
+                                    score += 200;
+                                }
+
+                                // Priority 3: Safety (Penalize exposing own piece)
+                                if (checkExposed(move.endR, move.endC, opponentPlayer, tempBoard)) {
+                                    score -= 150; 
+                                }
+                                
+                                // Priority 4: King preference 
+                                if (tempBoard[move.endR][move.endC].isKing) {
+                                    score += 10;
+                                }
+
+                                // Priority 5: Blocking opponent's base row
+                                if (move.endR === 0) {
+                                    score += 20; 
+                                }
+
+                                movesWithScores.push({ move: { startR: r, startC: c, endR: move.endR, endC: move.endC, isJump: move.isJump, capturedR: move.capturedR, capturedC: move.capturedC }, score });
+                            }
+                        });
+                    }
+                }
+            }
+            
+            if (movesWithScores.length === 0) {
+                 checkWinCondition();
+                 return;
+            }
+
+            // 2. Select the move with the highest score
+            movesWithScores.sort((a, b) => b.score - a.score);
+            
+            const topScore = movesWithScores[0].score;
+            let bestMoveCandidates = movesWithScores.filter(m => m.score === topScore);
+            
+            const finalMove = bestMoveCandidates[Math.floor(Math.random() * bestMoveCandidates.length)].move;
+            
+            // 3. Wykonanie ruchu (Visualizacja + wykonanie)
+            
+            // Wizualne podświetlenie (dla gracza)
+            selectedPiece = getIndex(finalMove.startR, finalMove.startC); // Ustaw selectedPiece, aby executeMove mogło działać
+            clearHighlights();
+            document.querySelector(`.cell[data-index='${selectedPiece}']`).classList.add('highlight');
+            document.querySelector(`.cell[data-index='${getIndex(finalMove.endR, finalMove.endC)}']`).classList.add('highlight');
+
+            // Wykonaj ruch po opóźnieniu (dla wizualizacji)
+            setTimeout(() => {
+                executeMove(finalMove);
+                if (selectedPiece === null) {
+                    clearHighlights();
+                    switchTurn();
+                }
+            }, 700);
+        }
+        
+        // Checks if placing a piece at (r, c) exposes it to a jump by the opponent
+        function checkExposed(r, c, opponentPlayer, board) {
+            const piece = board[r][c];
+            if (!piece) return false;
+            
+            // Temporarily set the current player to the opponent to check their moves
+            const originalCurrentPlayer = currentPlayer;
+            currentPlayer = opponentPlayer;
+            
+            let exposed = false;
+            
+            for (let oppR = 0; oppR < BOARD_SIZE; oppR++) {
+                for (let oppC = 0; oppC < BOARD_SIZE; oppC++) {
+                    const opponentPiece = board[oppR][oppC];
+                    if (opponentPiece && opponentPiece.player === opponentPlayer) {
+                        const jumps = getJumps(oppR, oppC, opponentPiece, board);
+                        // Check if any opponent's jump lands on (r, c)
+                        if (jumps.some(j => j.endR === r && j.endC === c)) {
+                            exposed = true;
+                            break;
+                        }
+                    }
+                }
+                if (exposed) break;
+            }
+
+            currentPlayer = originalCurrentPlayer; // Restore turn
+            return exposed;
+        }
+
+
+        // --- UI & STATE CONTROL ---
+        
+        function clearHighlights() {
+            document.querySelectorAll('.highlight').forEach(cell => {
+                cell.classList.remove('highlight');
+            });
+        }
+        
+        function switchTurn() {
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            
+            mustJump = checkMandatoryJumps();
+            
+            checkWinCondition();
+            
+            if (!mustJump && gameActive) {
+                statusText.textContent = `Turn: Player ${currentPlayer} (${currentPlayer === 1 ? 'Pink' : 'Cyan'})`;
+            }
+
+            if (playVsAI && currentPlayer === 2 && gameActive) {
+                // Poczekaj na ruch AI
+                setTimeout(makeAIMove, 700);
+            }
+        }
+
+        function checkWinCondition() {
+            let p1Pieces = 0;
+            let p2Pieces = 0;
+            let p1CanMove = false;
+            let p2CanMove = false;
+            
+            const originalCurrentPlayer = currentPlayer;
+
+            // Check Player 1's status
+            currentPlayer = 1;
+            boardState.forEach((row, r) => {
+                row.forEach((piece, c) => {
+                    if (piece && piece.player === 1) {
+                        p1Pieces++;
+                        if (getMoves(r, c, piece).length > 0 || getJumps(r, c, piece).length > 0) p1CanMove = true;
+                    }
+                });
+            });
+
+            // Check Player 2's status
+            currentPlayer = 2;
+            boardState.forEach((row, r) => {
+                row.forEach((piece, c) => {
+                    if (piece && piece.player === 2) {
+                        p2Pieces++;
+                        if (getMoves(r, c, piece).length > 0 || getJumps(r, c, piece).length > 0) p2CanMove = true;
+                    }
+                });
+            });
+
+            currentPlayer = originalCurrentPlayer;
+
+            if (p1Pieces === 0 || (!p1CanMove && p1Pieces > 0)) {
+                statusText.textContent = "GAME OVER! Player 2 (Cyan) WINS!";
+                gameActive = false;
+                // disableBoard(); 
+            } else if (p2Pieces === 0 || (!p2CanMove && p2Pieces > 0)) {
+                statusText.textContent = "GAME OVER! Player 1 (Pink) WINS!";
+                gameActive = false;
+                // disableBoard(); 
+            }
+        }
+        
+        function disableBoard() {
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.removeEventListener('click', handleCellClick);
+            });
+        }
+
+        function resetGame() {
+            currentPlayer = 1;
+            selectedPiece = null;
+            gameActive = playVsAI || document.getElementById('mode-player').classList.contains('active');
+            initBoard();
+            if(!gameActive) statusText.textContent = "SELECT MODE!";
+        }
+
+        // Default to Two Players mode on load
+        setGameMode(false);
+    </script>
+</body>
+</html>
