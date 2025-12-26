@@ -1,170 +1,718 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" href="icon.png">
-    <title>Experminet Log</title>
-    <style>
-        :root {
-            --term-green: #00ff41;
-            /* A slightly desaturated green for the glow to prevent "boxing" */
-            --term-glow: rgba(0, 255, 65, 0.2); 
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Hub // SYSTEM READY</title>
+  
+  <link rel="icon" type="image/png" href="icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 
-        /* Reset all backgrounds to pure black */
-        html, body {
-            background-color: #000 !important;
-            color: var(--term-green);
-            font-family: 'Courier New', Courier, monospace;
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            width: 100%;
-            overflow: hidden;
-            display: flex;
-        }
+<style>
+  /* --- 1. GLOBAL VARIABLES & CRT SETUP --- */
+  :root {
+    --neon-pink: #ff00ff;
+    --neon-blue: #00ffff;
+    --neon-green: #39ff14;
+    --bg-dark: #050010;
+    --scanline-color: rgba(0, 0, 0, 0.5);
+  }
 
-        /* GLOBAL SCANLINE & VIGNETTE OVERLAY */
-        /* This covers the WHOLE screen so there is no color difference */
-        #crt-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: 
-                linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), 
-                linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-            background-size: 100% 3px, 3px 100%;
-            pointer-events: none; /* Let clicks pass through */
-            z-index: 1000;
-        }
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-dark);
+    /* Retro Grid Background */
+    background-image: 
+      linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px);
+    background-size: 40px 40px;
+    font-family: 'VT323', monospace; /* The 80s font */
+    
+    /* --- UPDATED LAYOUT LOGIC --- */
+    height: 100vh; /* Force full screen height */
+    overflow: hidden; /* Stop the whole page from scrolling */
+    
+    color: var(--neon-blue);
+    display: flex;
+    flex-direction: column; 
+  }
 
-        /* Subtle vignette to blend the corners */
-        #vignette {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle, rgba(0,0,0,0) 60%, rgba(0,0,0,0.8) 100%);
-            pointer-events: none;
-            z-index: 1001;
-        }
+  /* CRT SCREEN OVERLAY (Scanlines + Flicker) */
+  body::after {
+    content: " ";
+    display: block;
+    position: fixed;
+    top: 0; left: 0; bottom: 0; right: 0;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    z-index: 99999;
+    background-size: 100% 2px, 3px 100%;
+    pointer-events: none;
+    animation: flicker 0.15s infinite;
+  }
 
-        #terminal {
-            width: 100%;
-            height: 100vh;
-            padding: 50px;
-            background: transparent; /* Changed to transparent */
-            overflow-y: auto;
-            white-space: pre-wrap;
-            display: none;
-            box-sizing: border-box;
-            position: relative;
-            z-index: 10;
-            /* Uniform text shadow */
-            text-shadow: 0 0 8px var(--term-glow);
-            animation: flicker 0.1s infinite;
-        }
+  @keyframes flicker {
+    0% { opacity: 0.97; }
+    50% { opacity: 0.94; }
+    100% { opacity: 0.98; }
+  }
 
-        @keyframes flicker {
-            0% { opacity: 0.99; }
-            50% { opacity: 1; }
-            100% { opacity: 0.98; }
-        }
+  /* CUSTOM SCROLLBAR (Retro Blocky) */
+  ::-webkit-scrollbar { width: 15px; }
+  ::-webkit-scrollbar-track { background: #000; border-left: 1px solid var(--neon-pink); }
+  ::-webkit-scrollbar-thumb { 
+    background: var(--neon-pink); 
+    border: 2px solid #000;
+    box-shadow: inset 2px 2px 0px rgba(255,255,255,0.3);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #ff66ff; }
 
-        #overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
-            cursor: pointer;
-        }
+  /* --- 2. HEADER --- */
+  .header-container {
+    position: relative;
+    width: 100%;
+    padding: 30px 0;
+    /* Removed margin-bottom to let grid handle spacing if needed */
+    text-align: center;
+    border-bottom: 2px solid var(--neon-pink);
+    box-shadow: 0 0 15px var(--neon-pink);
+    background: rgba(0,0,0,0.6);
+    flex-shrink: 0; /* Prevents header from shrinking */
+  }
 
-        .blink-text { animation: blinker 1.5s linear infinite; color: #fff; text-transform: uppercase; letter-spacing: 2px; }
-        @keyframes blinker { 50% { opacity: 0; } }
+  .banner {
+    max-width: 50%;
+    height: auto;
+    display: inline-block;
+    filter: drop-shadow(0 0 5px var(--neon-blue));
+    transition: filter 0.3s;
+  }
+  .banner:hover {
+    filter: drop-shadow(0 0 10px var(--neon-pink)) hue-rotate(90deg);
+  }
 
-        #terminal::after {
-            content: "█";
-            margin-left: 5px;
-            animation: cursor-blink 0.8s steps(2, start) infinite;
-        }
-        @keyframes cursor-blink { to { visibility: hidden; } }
+  .logo-wrapper {
+    position: absolute;
+    top: 15px;
+    right: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+  }
 
-        .system { color: #444; font-style: italic; text-shadow: none; }
-        #terminal::-webkit-scrollbar { width: 0px; }
-    </style>
+  .logo {
+    width: 80px;
+    height: 80px;
+    border-radius: 0; 
+    object-fit: cover;
+    border: 2px solid var(--neon-blue);
+    box-shadow: 4px 4px 0px var(--neon-pink); 
+    image-rendering: pixelated; 
+    cursor: pointer; /* Added for clickability */
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  
+  /* Added hover effect for the logo button */
+  .logo:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0px var(--neon-blue);
+  }
+
+  .logo-text {
+    font-size: 1.2rem;
+    color: var(--neon-blue);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 2px 2px 0 #000;
+  }
+
+  /* --- 3. THE GAME GRID (SCROLLABLE AREA) --- */
+  .game-grid {
+    display: flex;
+    flex-wrap: wrap; 
+    justify-content: center; 
+    align-content: flex-start; /* Ensures items start at top when scrolling */
+    gap: 25px;
+    max-width: 1700px; 
+    margin: 0 auto;
+    padding: 20px;
+    
+    /* UPDATED: Takes remaining space and scrolls internally */
+    flex: 1; 
+    overflow-y: auto; 
+    width: 100%; /* Ensure it spans width */
+    box-sizing: border-box; /* Includes padding in width */
+  }
+  
+  .game-module {
+    width: calc((100% / 5) - 50px); 
+    min-width: 150px;
+    height: fit-content; /* Prevents stretching */
+    display: block;
+    position: relative;
+    transition: transform 0.1s step-end;
+    cursor: pointer;
+    text-decoration: none; 
+    background: #000;
+    border: 2px solid var(--neon-blue);
+    padding: 5px;
+    box-shadow: 5px 5px 0px var(--neon-pink); 
+  }
+
+  .game-module img {
+    width: 100%;
+    height: auto;
+    display: block;
+    image-rendering: pixelated;
+    filter: sepia(0.2) contrast(1.2);
+  }
+
+  .creator-text {
+    margin-top: 8px;
+    font-size: 1.4rem; 
+    text-align: center;
+    color: #fff;
+    background-color: var(--neon-pink);
+    color: #000;
+    font-weight: bold;
+    display: block;
+    text-transform: uppercase;
+  }
+
+  .game-module:hover {
+    transform: translate(-3px, -3px);
+    box-shadow: 8px 8px 0px var(--neon-blue);
+    border-color: var(--neon-pink);
+    z-index: 10;
+  }
+  
+  .game-module:hover .creator-text {
+    background-color: var(--neon-blue);
+  }
+
+  /* --- 4. FOOTER --- */
+  .footer {
+    text-align: center;
+    padding: 20px;
+    background: #000; 
+    border-top: 2px solid var(--neon-pink);
+    font-size: 1.2rem;
+    
+    /* UPDATED: Keeps footer from shrinking */
+    flex-shrink: 0;
+    margin-top: 0; /* Auto margin no longer needed */
+    
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    z-index: 100; /* Ensure it stays above grid if needed */
+  }
+
+  .footer a {
+    color: var(--neon-green);
+    text-decoration: none;
+    text-shadow: 0 0 5px var(--neon-green);
+  }
+
+  .footer a:hover {
+    color: #fff;
+    text-decoration: underline;
+    background-color: var(--neon-green);
+    color: #000;
+    text-shadow: none;
+  }
+  
+  /* --- 5. NEW: TEAM MEMBERS OVERLAY STYLES --- */
+  #team-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 99997; /* Below terminal, above content */
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(5px);
+  }
+  
+  .team-window {
+    width: 500px;
+    max-height: 80vh;
+    background-color: #000000;
+    border: 4px solid var(--neon-pink);
+    box-shadow: 0 0 20px var(--neon-pink);
+    display: flex;
+    flex-direction: column;
+    font-family: 'VT323', monospace;
+    font-size: 1.4rem;
+    color: var(--neon-pink);
+    overflow: hidden;
+  }
+  
+  .team-header {
+    background: var(--neon-pink);
+    color: #000;
+    padding: 10px 15px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    text-transform: uppercase;
+  }
+  
+  .team-body {
+    padding: 20px;
+    flex: 1;
+    overflow-y: auto;
+  }
+  
+  .team-member {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+    border: 1px solid var(--neon-blue);
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    transition: background 0.2s;
+  }
+  
+  .team-member:hover {
+    background: rgba(0, 255, 255, 0.1);
+  }
+  
+  .member-pfp {
+    width: 60px;
+    height: 60px;
+    border: 2px solid var(--neon-green);
+    object-fit: cover;
+    margin-right: 15px;
+    image-rendering: pixelated;
+    box-shadow: 3px 3px 0 var(--neon-blue);
+  }
+  
+  .member-info {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .member-name {
+    color: var(--neon-green);
+    font-size: 1.6rem;
+    text-shadow: 0 0 5px var(--neon-green);
+    line-height: 1;
+  }
+  
+  .member-role {
+    color: var(--neon-blue);
+    font-size: 1.2rem;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+  
+  .close-button {
+    cursor: pointer;
+    font-size: 1.2rem;
+    text-transform: uppercase;
+    color: #000;
+  }
+  
+  /* --- 6. TERMINAL / DOS PROMPT STYLES (Existing) --- */
+  #terminal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 99998; 
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(5px);
+  }
+
+  .terminal-window {
+    width: 700px;
+    height: 500px;
+    background-color: #000000;
+    border: 4px solid var(--neon-green);
+    box-shadow: 0 0 20px var(--neon-green);
+    display: flex;
+    flex-direction: column;
+    font-family: 'VT323', monospace;
+    font-size: 1.5rem; 
+    color: var(--neon-green); 
+    border-radius: 0;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .terminal-header {
+    background: var(--neon-green);
+    color: #000;
+    padding: 5px 15px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    text-transform: uppercase;
+  }
+
+  .terminal-body {
+    padding: 15px;
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .terminal-body::-webkit-scrollbar-thumb {
+    background: var(--neon-green);
+    border: none;
+  }
+
+  .output-line { margin-bottom: 2px; color: var(--neon-green); text-shadow: 0 0 2px var(--neon-green); }
+  .output-line.success { color: var(--neon-blue); text-shadow: 0 0 2px var(--neon-blue); }
+  .output-line.error { color: #ff3333; text-shadow: 0 0 2px #ff3333; }
+  .output-line.system { color: #ffff00; font-style: italic; }
+
+  .input-line {
+    display: flex;
+    margin-top: auto;
+    border-top: 1px dashed var(--neon-green);
+    padding-top: 10px;
+  }
+
+  .prompt-label { margin-right: 8px; color: var(--neon-green); font-weight: bold; }
+
+  #termInput {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-family: inherit;
+    font-size: inherit;
+    flex: 1;
+    outline: none;
+    text-transform: uppercase;
+  }
+
+  #termInput:focus {
+     caret-color: var(--neon-green); 
+  }
+
+  /* MEDIA VIEWER (Existing) */
+  #media-viewer {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: #000;
+    z-index: 99998;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border: 10px solid var(--neon-pink);
+    box-sizing: border-box;
+  }
+  #media-content img { 
+    max-width: 80%; 
+    max-height: 70vh; 
+    border: 4px solid #fff; 
+    box-shadow: 10px 10px 0px var(--neon-blue);
+  }
+  #media-close-btn {
+    margin-top: 30px;
+    color: #000;
+    background: var(--neon-green);
+    font-family: 'VT323', monospace;
+    font-size: 2rem;
+    cursor: pointer;
+    border: 2px solid #fff;
+    padding: 5px 20px;
+    box-shadow: 5px 5px 0 #fff;
+  }
+  #media-close-btn:hover { transform: scale(1.1); }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .game-module { width: calc((100% / 3) - 30px); }
+    .banner { max-width: 80%; }
+    .terminal-window { width: 95%; }
+    .team-window { width: 90%; }
+  }
+  @media (max-width: 600px) {
+    .game-module { width: 100%; max-width: 300px; }
+    .logo-wrapper { transform: scale(0.8); top: 10px; right: 10px; position: relative; top: 0; right: 0; margin-top: 10px;}
+  }
+</style>
 </head>
 <body>
 
-    <div id="crt-overlay"></div>
-    <div id="vignette"></div>
+  <div class="header-container">
+    <img src="banner.png" alt="Site Banner" class="banner">
+    
+    <div class="logo-wrapper">
+      <img src="logo.png" alt="Logo" class="logo" onclick="toggleTeam()">
+      <span class="logo-text">Team PROTOCORE</span>
+    </div>
+  </div>
 
-    <div id="overlay" onclick="initiateTerminal()">
-        <h1 class="blink-text">[ Initialize Terminal ]</h1>
+  <div class="game-grid" id="gridContainer">
     </div>
 
-    <div id="terminal"></div>
+  <div id="terminal-overlay">
+    <div class="terminal-window">
+      <div class="terminal-header">
+        <span>C:\SYSTEM\COMMAND.EXE</span>
+        <span style="cursor:pointer;" onclick="toggleTerminal()">[X]</span>
+      </div>
+      <div class="terminal-body" id="terminalBody">
+        <div class="output-line">BOOT_SEQUENCE_INIT... OK</div>
+        <div class="output-line">LOADING MEMORY... 640KB OK</div>
+        <div class="output-line">PROTOCORE OS [Version 1.0]</div>
+        <div class="output-line"><br>Type 'HELP' for a list of commands.</div>
+        <div class="output-line"><br></div>
+        
+        <div class="input-line">
+          <span class="prompt-label">C:\USERS\GUEST></span>
+          <input type="text" id="termInput" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div id="team-overlay">
+    <div class="team-window">
+      <div class="team-header">
+        <span>TEAM PROTOCORE</span>
+        <span class="close-button" onclick="closeTeam()">[X] CLOSE</span>
+      </div>
+      <div class="team-body" id="teamBody">
+        </div>
+    </div>
+  </div>
 
-    <script>
-        const terminal = document.getElementById('terminal');
-        const overlay = document.getElementById('overlay');
-        const beep = new Audio('beep.mp3');
-        const DEFAULT_URL = "https://www.google.com";
+  <div id="media-viewer">
+    <div id="media-content"></div>
+    <div id="media-close-btn" onclick="closeMedia()">CLOSE (ESC)</div>
+  </div>
 
-        async function initiateTerminal() {
-            if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen().catch(() => {});
-            }
-            overlay.style.display = 'none';
-            terminal.style.display = 'block';
-            await startTerminal();
+  <div class="footer">
+    Powered by <a href="https://discord.gg/uEZR8F2rfG" target="_blank">ProtoCore Network</a> // EST. 2025
+  </div>
+
+  <script>
+    // --- CONFIGURE YOUR GAMES HERE ---
+    const games = [
+      { image: 'PROTO.png', url: 'prototype3.html', creator: 'AcDevr' },
+      { image: 'tictac.png', url: 'tictactoe.html', creator: 'klisorl' },
+      { image: 'warc.png', url: 'warc.html', creator: 'klisorl' },
+      { image: 'pong.png', url: 'pong.html', creator: 'klisorl' },
+      // { image: 'mc.png', url: '#', creator: 'Notch' } 
+    ];
+
+    // --- CONFIGURE YOUR TERMINAL FILES HERE ---
+    const terminalFiles = {
+      'secret.png': { type: 'image', src: 'secret.png' },
+      'maze.mp3': { type: 'audio', src: 'proto_maze.mp3' },
+      'music.mp3':  { type: 'audio', src: 'music.mp3' },
+    };
+    
+    // --- CONFIGURE YOUR TEAM MEMBERS HERE (New Section) ---
+    const teamMembers = [
+      { name: 'AcDevr', pfp: 'acdevr_pfp.png', role: 'Lead Developer' },
+      { name: 'Klisorl', pfp: 'klisorl_pfp.png', role: 'Game Contributor' },
+      { name: 'NeonKnight', pfp: 'neon_pfp.png', role: 'Graphics & Assets' },
+      { name: 'SupportBot', pfp: 'bot_pfp.png', role: 'Community Manager' }
+      // Add more members as needed!
+    ];
+
+    // --- GAME GRID LOGIC (Unchanged) ---
+    const container = document.getElementById('gridContainer');
+
+    games.forEach(game => {
+      const link = document.createElement('a');
+      link.href = game.url;
+      link.className = 'game-module';
+
+      const img = document.createElement('img');
+      img.src = game.image;
+      img.alt = 'Play Game';
+
+      const textDiv = document.createElement('div');
+      textDiv.className = 'creator-text';
+      textDiv.textContent = 'DEV: ' + (game.creator || 'USER');
+
+      link.appendChild(img);
+      link.appendChild(textDiv);
+      container.appendChild(link);
+    });
+    
+    // --- TEAM MEMBERS LOGIC (New Section) ---
+    const teamOverlay = document.getElementById('team-overlay');
+    const teamBody = document.getElementById('teamBody');
+
+    function populateTeamMembers() {
+      teamBody.innerHTML = ''; // Clear previous content
+      teamMembers.forEach(member => {
+        const memberDiv = document.createElement('div');
+        memberDiv.className = 'team-member';
+
+        const pfpImg = document.createElement('img');
+        pfpImg.src = member.pfp;
+        pfpImg.alt = member.name + ' PFP';
+        pfpImg.className = 'member-pfp';
+        
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'member-info';
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'member-name';
+        nameSpan.textContent = member.name;
+
+        const roleSpan = document.createElement('span');
+        roleSpan.className = 'member-role';
+        roleSpan.textContent = member.role;
+        
+        infoDiv.appendChild(nameSpan);
+        infoDiv.appendChild(roleSpan);
+        
+        memberDiv.appendChild(pfpImg);
+        memberDiv.appendChild(infoDiv);
+        
+        teamBody.appendChild(memberDiv);
+      });
+    }
+    
+    function toggleTeam() {
+      const isHidden = (teamOverlay.style.display !== 'flex');
+      if (isHidden) {
+        populateTeamMembers(); // Populate when opening
+        teamOverlay.style.display = 'flex';
+      } else {
+        teamOverlay.style.display = 'none';
+      }
+    }
+    
+    function closeTeam() {
+      teamOverlay.style.display = 'none';
+    }
+
+    // --- TERMINAL LOGIC (Modified to include closeTeam on ESC) ---
+    const terminalOverlay = document.getElementById('terminal-overlay');
+    const termInput = document.getElementById('termInput');
+    const terminalBody = document.getElementById('terminalBody');
+    const mediaViewer = document.getElementById('media-viewer');
+    const mediaContent = document.getElementById('media-content');
+
+    // 1. Toggle Terminal on SHIFT + J
+    document.addEventListener('keydown', (e) => {
+      if (e.shiftKey && (e.key === 'J' || e.key === 'j')) {
+        e.preventDefault();
+        // Ensure team is closed when opening terminal
+        if (teamOverlay.style.display === 'flex') closeTeam(); 
+        toggleTerminal();
+      }
+      // Close media/team/terminal on ESC
+      if (e.key === 'Escape') {
+        closeMedia();
+        if(teamOverlay.style.display === 'flex') closeTeam();
+        else if(terminalOverlay.style.display === 'flex') toggleTerminal();
+      }
+    });
+
+    function toggleTerminal() {
+      const isHidden = (terminalOverlay.style.display !== 'flex');
+      terminalOverlay.style.display = isHidden ? 'flex' : 'none';
+      if (isHidden) {
+        termInput.value = '';
+        termInput.focus();
+      }
+    }
+
+    // 2. Handle Commands (Unchanged)
+    termInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const rawCommand = termInput.value.trim();
+        printLine("C:\\USERS\\GUEST> " + rawCommand);
+        
+        if (rawCommand) {
+          processCommand(rawCommand);
+        }
+        
+        termInput.value = '';
+        terminalBody.scrollTop = terminalBody.scrollHeight;
+      }
+    });
+
+    function printLine(text, type = 'normal') {
+      const line = document.createElement('div');
+      line.className = 'output-line ' + type;
+      line.textContent = text;
+      const inputLine = document.querySelector('.input-line');
+      terminalBody.insertBefore(line, inputLine);
+    }
+
+    function processCommand(cmdStr) {
+      const parts = cmdStr.split(' ');
+      const command = parts[0].toLowerCase();
+      const argument = parts[1];
+
+      // --- HELP COMMAND ---
+      if (command === 'help') {
+        printLine("COMMAND LIST:", "success");
+        printLine("  SHOW [FILE]  - OPEN MEDIA FILE");
+        printLine("  HELP         - SHOW THIS LIST");
+        printLine("");
+        printLine(">> SYSTEM ALERT: ADMIN ACCESS LOCKED.", "system");
+        return;
+      }
+
+      // --- SHOW / VIEW COMMAND ---
+      if (command === 'show' || command === 'view') {
+        if (!argument) {
+          printLine("USAGE: TYPE 'SHOW [FILENAME]'", "system");
+          printLine("EXAMPLE: SHOW SECRET.PNG");
+          return;
         }
 
-        async function startTerminal() {
-            let logText = "";
-            try {
-                const response = await fetch('log.txt', { cache: "no-cache" });
-                if (!response.ok) throw new Error();
-                logText = await response.text();
-            } catch (err) {
-                terminal.innerHTML = `<span style="color:red">ERR: LOG_NOT_FOUND</span>\n` +
-                                   `<span class="system">Local file access denied. Upload to server.</span>`;
-                return;
-            }
-
-            const lines = logText.split('\n');
-
-            for (let line of lines) {
-                let trimmedLine = line.trim();
-                if (!trimmedLine) continue;
-
-                if (trimmedLine.includes('[terminate]')) {
-                    terminal.innerHTML += `\n\n<span class="system">>> SHUTDOWN SEQUENCE INITIATED...</span>`;
-                    
-                    let targetURL = DEFAULT_URL;
-                    const urlMatch = trimmedLine.match(/\{(.*?)\}/);
-                    if (urlMatch && urlMatch[1]) {
-                        targetURL = urlMatch[1];
-                    }
-
-                    await new Promise(r => setTimeout(r, 2000));
-                    window.location.href = targetURL;
-                    return;
-                }
-
-                if (trimmedLine.startsWith('>')) {
-                    beep.currentTime = 0;
-                    beep.play().catch(() => {});
-                    terminal.innerHTML += `\n${trimmedLine}`;
-                    terminal.scrollTop = terminal.scrollHeight;
-                    await new Promise(r => setTimeout(r, 2500));
-                } else {
-                    terminal.innerHTML += `\n${trimmedLine}`;
-                    terminal.scrollTop = terminal.scrollHeight;
-                    await new Promise(r => setTimeout(r, 150));
-                }
-            }
+        const fileData = terminalFiles[argument];
+        if (fileData) {
+          printLine(`ACCESSING ${argument}...`, "success");
+          openMedia(fileData);
+        } else {
+          printLine(`ERROR 404: FILE '${argument}' NOT FOUND.`, "error");
         }
-    </script>
+
+      } else {
+        printLine(`BAD COMMAND OR FILE NAME: '${command}'`, "error");
+      }
+    }
+
+    // 3. Media Viewer Logic (Unchanged)
+    function openMedia(file) {
+      mediaContent.innerHTML = ''; 
+
+      if (file.type === 'image') {
+        const img = document.createElement('img');
+        img.src = file.src;
+        mediaContent.appendChild(img);
+      } else if (file.type === 'audio') {
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.autoplay = true;
+        audio.src = file.src;
+        mediaContent.appendChild(audio);
+      }
+
+      mediaViewer.style.display = 'flex';
+    }
+
+    function closeMedia() {
+      mediaViewer.style.display = 'none';
+      mediaContent.innerHTML = ''; 
+    }
+
+  </script>
 </body>
 </html>
