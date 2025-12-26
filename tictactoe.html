@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>90s Arcade Tic-Tac-Toe - ENHANCED AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Global Styles - 90s Arcade Theme */
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #000033;
+            color: #ccff00;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 { 
+            text-shadow: 2px 2px #ff00ff;
+            margin-bottom: 10px; 
+            font-size: 1.5rem;
+        }
+        
+        /* Game Mode Selector */
+        .mode-selector {
+            margin: 20px 0;
+            padding: 10px;
+            border: 2px solid #00ffff;
+            background-color: #1a004d;
+        }
+
+        .mode-selector button {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #ff00ff;
+            color: #ccff00;
+            border: 2px solid #ccff00;
+            padding: 8px 15px;
+            margin: 0 5px;
+            cursor: pointer;
+            box-shadow: 3px 3px #00ffff;
+            transition: all 0.1s;
+        }
+
+        .mode-selector button:hover {
+            background-color: #ff33ff;
+            box-shadow: 1px 1px #00ffff;
+        }
+
+        .mode-selector button.active {
+            background-color: #00ffff;
+            color: #000033;
+            box-shadow: 3px 3px #ff00ff;
+        }
+
+        .status {
+            margin-bottom: 20px;
+            font-size: 1rem;
+            color: #00ffff;
+            height: 20px;
+            text-align: center;
+        }
+
+        /* Board Styles */
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 90px);
+            grid-template-rows: repeat(3, 90px);
+            gap: 5px;
+            border: 5px solid #ff00ff;
+            box-shadow: 0 0 20px #ff00ff, 0 0 10px #00ffff;
+            margin-bottom: 20px;
+            position: relative; /* For Overlay */
+        }
+
+        .cell {
+            background-color: #00004d;
+            border: 2px solid #00ffff;
+            font-size: 2.5rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.1s;
+            position: relative;
+        }
+
+        .cell:hover { background-color: #001a66; }
+        .cell.x { color: #ccff00; }
+        .cell.o { color: #ff00ff; }
+
+        /* Warning Style */
+        .cell.fading {
+            opacity: 0.5;
+            border: 2px dashed #ff00ff;
+            animation: flicker 1s infinite alternate;
+        }
+
+        .cell.fading::after {
+            content: '!!';
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 0.8rem;
+            color: #ccff00;
+        }
+
+        @keyframes flicker {
+            0% { opacity: 0.5; box-shadow: 0 0 5px #ff00ff; }
+            100% { opacity: 1; box-shadow: none; }
+        }
+
+        /* Game Over Overlay - NOWOŚĆ */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 51, 0.9); /* Semi-transparent dark blue */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            text-align: center;
+            color: #ccff00;
+            text-shadow: 2px 2px #ff00ff;
+            z-index: 10;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .overlay.visible {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Reset Button */
+        .btn-reset {
+            font-family: 'Press Start 2P', cursive;
+            padding: 10px 20px;
+            font-size: 0.8rem;
+            background-color: #00ffff;
+            color: #000033;
+            border: 2px solid #ff00ff;
+            border-radius: 0;
+            cursor: pointer;
+            box-shadow: 4px 4px #ff00ff;
+        }
+
+        .btn-reset:hover {
+            background-color: #33ffff;
+            box-shadow: 2px 2px #ff00ff;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>ARCADE TIC-TAC-TOE</h1>
+    
+    <div class="mode-selector">
+        <button id="mode-player" onclick="setGameMode(false)">Two Players</button>
+        <button id="mode-ai" onclick="setGameMode(true)">Play vs AI</button>
+    </div>
+
+    <div class="status" id="status">Select Game Mode</div>
+
+    <div class="board" id="board">
+        <div class="overlay" id="gameOverOverlay">
+            <span id="overlayMessage"></span>
+            <div style="font-size: 0.8rem; margin-top: 20px; color: #00ffff;">PRESS RESET TO CONTINUE</div>
+        </div>
+        <div class="cell" data-index="0"></div>
+        <div class="cell" data-index="1"></div>
+        <div class="cell" data-index="2"></div>
+        <div class="cell" data-index="3"></div>
+        <div class="cell" data-index="4"></div>
+        <div class="cell" data-index="5"></div>
+        <div class="cell" data-index="6"></div>
+        <div class="cell" data-index="7"></div>
+        <div class="cell" data-index="8"></div>
+    </div>
+
+    <button class="btn-reset" onclick="resetGame()">RESET GAME</button>
+
+    <script>
+        const cells = document.querySelectorAll('.cell');
+        const statusText = document.getElementById('status');
+        const overlay = document.getElementById('gameOverOverlay');
+        const overlayMessage = document.getElementById('overlayMessage');
+        
+        let currentPlayer = 'X';
+        let gameActive = false;
+        let playVsAI = false; 
+        
+        let xMoves = [];
+        let oMoves = [];
+
+        const winningConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], 
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], 
+            [0, 4, 8], [2, 4, 6]             
+        ];
+
+        // --- GAME MODE HANDLER ---
+        function setGameMode(isAI) {
+            playVsAI = isAI;
+            document.getElementById('mode-player').classList.remove('active');
+            document.getElementById('mode-ai').classList.remove('active');
+            
+            if (isAI) {
+                document.getElementById('mode-ai').classList.add('active');
+            } else {
+                document.getElementById('mode-player').classList.add('active');
+            }
+            resetGame(); 
+            gameActive = true;
+        }
+
+        // --- MAIN GAME LOGIC ---
+        function handleCellClick(e) {
+            if (!gameActive) {
+                statusText.textContent = "SELECT MODE! GAME OFFLINE.";
+                return;
+            }
+
+            const cell = e.target;
+            const index = parseInt(cell.getAttribute('data-index'));
+
+            if (cell.textContent !== "") return;
+            if (playVsAI && currentPlayer === 'O') return; 
+
+            makeMove(cell, index);
+
+            if (playVsAI && gameActive && currentPlayer === 'O') {
+                setTimeout(makeAIMove, 500); 
+            }
+        }
+
+        function makeMove(cell, index) {
+            const currentMoves = currentPlayer === 'X' ? xMoves : oMoves;
+            
+            // 1. Record move
+            currentMoves.push(index);
+
+            // 2. Remove oldest move if count > 3
+            if (currentMoves.length > 3) {
+                const indexToRemove = currentMoves.shift(); 
+                const cellToRemove = document.querySelector(`.cell[data-index='${indexToRemove}']`);
+                if (cellToRemove) {
+                    cellToRemove.textContent = "";
+                    cellToRemove.classList.remove('x', 'o', 'fading');
+                }
+            }
+
+            // 3. Update board view (new mark)
+            // If the cell was occupied by the *other* player, it is now overwritten.
+            cell.textContent = currentPlayer;
+            cell.classList.remove(currentPlayer === 'X' ? 'o' : 'x'); // Remove opponent's class if overwritten
+            cell.classList.add(currentPlayer.toLowerCase());
+
+            // 4. Check for win
+            if (checkWin(currentMoves)) {
+                gameOver(`WINNER: PLAYER ${currentPlayer}!`);
+                return;
+            }
+
+            // 5. Change turn
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            statusText.textContent = `Turn: ${currentPlayer}`;
+
+            // 6. Update warning highlights
+            updateWarnings();
+        }
+
+        // --- AI LOGIC (Enhanced) ---
+        function makeAIMove() {
+            if (!gameActive || currentPlayer !== 'O') return;
+
+            let moveIndex = getBestMove(oMoves, xMoves, 'O');
+            
+            if (moveIndex !== null) {
+                const cell = document.querySelector(`.cell[data-index='${moveIndex}']`);
+                makeMove(cell, moveIndex);
+            }
+        }
+        
+        function getBestMove(aiMoves, playerMoves, aiPlayer) {
+            const allMoves = [...aiMoves, ...playerMoves];
+            const emptyCells = [];
+            for (let i = 0; i < 9; i++) {
+                if (!cells[i].textContent) emptyCells.push(i);
+            }
+
+            // 1. Check for immediate winning move (AI)
+            for (let i = 0; i < 9; i++) {
+                if (!allMoves.includes(i)) {
+                    let testMoves = [...aiMoves, i];
+                    if (checkWin(testMoves)) return i;
+                }
+            }
+
+            // 2. Block player's immediate winning move
+            for (let i = 0; i < 9; i++) {
+                if (!allMoves.includes(i)) {
+                    let testMoves = [...playerMoves, i];
+                    if (checkWin(testMoves)) return i;
+                }
+            }
+
+            // 3. Prefer the center (5) if empty
+            if (emptyCells.includes(4)) return 4;
+            
+            // 4. Offensive placement (set up two-in-a-row threats)
+            // (Simplified: if any empty cell gives AI two marks in a line, take it)
+            // This is harder due to the max 3 rule, so we skip complex threat analysis for now.
+
+            // 5. If moves must exceed 3 (i.e., AI must overwrite a cell)
+            if (aiMoves.length === 3 && emptyCells.length === 0) {
+                // Find a player's cell (X) to overwrite, prioritizing one that is *not* part of an immediate threat.
+                let targetX = null;
+                
+                // Try to find an X piece that is not part of a 2-in-a-row threat for the player
+                const playerThreats = [];
+                winningConditions.forEach(condition => {
+                    const countX = condition.filter(idx => playerMoves.includes(idx)).length;
+                    const countO = condition.filter(idx => aiMoves.includes(idx)).length;
+                    if (countX === 2 && countO === 0) {
+                        playerThreats.push(...condition.filter(idx => playerMoves.includes(idx)));
+                    }
+                });
+
+                // Get all X pieces not part of a direct threat
+                let safeXTiles = playerMoves.filter(idx => !playerThreats.includes(idx));
+                
+                if (safeXTiles.length > 0) {
+                    // Pick a random 'safe' X tile to overwrite
+                    targetX = safeXTiles[Math.floor(Math.random() * safeXTiles.length)];
+                } else {
+                    // If all X pieces are part of a threat, pick a random X piece anyway
+                    targetX = playerMoves[Math.floor(Math.random() * playerMoves.length)];
+                }
+                
+                return targetX;
+            }
+
+            // 6. Place on a random empty cell
+            if (emptyCells.length > 0) {
+                return emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            }
+            
+            return null; // Should not happen in this game logic
+        }
+
+        // --- UI FUNCTIONS ---
+        function updateWarnings() {
+            cells.forEach(cell => cell.classList.remove('fading'));
+            if (xMoves.length === 3) {
+                const oldestX = document.querySelector(`.cell[data-index='${xMoves[0]}']`);
+                if (oldestX) oldestX.classList.add('fading');
+            }
+            if (oMoves.length === 3) {
+                const oldestO = document.querySelector(`.cell[data-index='${oMoves[0]}']`);
+                if (oldestO) oldestO.classList.add('fading');
+            }
+        }
+
+        function checkWin(moves) {
+            return winningConditions.some(condition => {
+                return condition.every(index => {
+                    return moves.includes(index);
+                });
+            });
+        }
+        
+        // NOWOŚĆ: Funkcja wyświetlania komunikatu Game Over
+        function gameOver(message) {
+            gameActive = false;
+            statusText.textContent = "GAME OVER";
+            overlayMessage.textContent = message;
+            overlay.classList.add('visible');
+        }
+
+        function resetGame() {
+            currentPlayer = 'X';
+            gameActive = playVsAI || document.getElementById('mode-player').classList.contains('active');
+            xMoves = [];
+            oMoves = [];
+            
+            // Ukryj overlay
+            overlay.classList.remove('visible');
+
+            statusText.textContent = gameActive 
+                ? (playVsAI ? "Mode: Player vs AI. Turn: X" : "Mode: Two Players. Turn: X")
+                : "Select Game Mode";
+            
+            cells.forEach(cell => {
+                cell.textContent = "";
+                cell.classList.remove('x', 'o', 'fading');
+            });
+        }
+
+        // Initialize event listeners
+        cells.forEach(cell => cell.addEventListener('click', handleCellClick));
+
+        // Default to Two Players mode on load
+        setGameMode(false);
+    </script>
+</body>
+</html>

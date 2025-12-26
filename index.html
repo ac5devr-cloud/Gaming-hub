@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="icon.png">
+    <title>Experminet Log</title>
+    <style>
+        :root {
+            --term-green: #00ff41;
+            /* A slightly desaturated green for the glow to prevent "boxing" */
+            --term-glow: rgba(0, 255, 65, 0.2); 
+        }
+
+        /* Reset all backgrounds to pure black */
+        html, body {
+            background-color: #000 !important;
+            color: var(--term-green);
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            display: flex;
+        }
+
+        /* GLOBAL SCANLINE & VIGNETTE OVERLAY */
+        /* This covers the WHOLE screen so there is no color difference */
+        #crt-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: 
+                linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), 
+                linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 3px, 3px 100%;
+            pointer-events: none; /* Let clicks pass through */
+            z-index: 1000;
+        }
+
+        /* Subtle vignette to blend the corners */
+        #vignette {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0) 60%, rgba(0,0,0,0.8) 100%);
+            pointer-events: none;
+            z-index: 1001;
+        }
+
+        #terminal {
+            width: 100%;
+            height: 100vh;
+            padding: 50px;
+            background: transparent; /* Changed to transparent */
+            overflow-y: auto;
+            white-space: pre-wrap;
+            display: none;
+            box-sizing: border-box;
+            position: relative;
+            z-index: 10;
+            /* Uniform text shadow */
+            text-shadow: 0 0 8px var(--term-glow);
+            animation: flicker 0.1s infinite;
+        }
+
+        @keyframes flicker {
+            0% { opacity: 0.99; }
+            50% { opacity: 1; }
+            100% { opacity: 0.98; }
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            cursor: pointer;
+        }
+
+        .blink-text { animation: blinker 1.5s linear infinite; color: #fff; text-transform: uppercase; letter-spacing: 2px; }
+        @keyframes blinker { 50% { opacity: 0; } }
+
+        #terminal::after {
+            content: "█";
+            margin-left: 5px;
+            animation: cursor-blink 0.8s steps(2, start) infinite;
+        }
+        @keyframes cursor-blink { to { visibility: hidden; } }
+
+        .system { color: #444; font-style: italic; text-shadow: none; }
+        #terminal::-webkit-scrollbar { width: 0px; }
+    </style>
+</head>
+<body>
+
+    <div id="crt-overlay"></div>
+    <div id="vignette"></div>
+
+    <div id="overlay" onclick="initiateTerminal()">
+        <h1 class="blink-text">[ Initialize Terminal ]</h1>
+    </div>
+
+    <div id="terminal"></div>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const overlay = document.getElementById('overlay');
+        const beep = new Audio('beep.mp3');
+        const DEFAULT_URL = "https://www.google.com";
+
+        async function initiateTerminal() {
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            }
+            overlay.style.display = 'none';
+            terminal.style.display = 'block';
+            await startTerminal();
+        }
+
+        async function startTerminal() {
+            let logText = "";
+            try {
+                const response = await fetch('log.txt', { cache: "no-cache" });
+                if (!response.ok) throw new Error();
+                logText = await response.text();
+            } catch (err) {
+                terminal.innerHTML = `<span style="color:red">ERR: LOG_NOT_FOUND</span>\n` +
+                                   `<span class="system">Local file access denied. Upload to server.</span>`;
+                return;
+            }
+
+            const lines = logText.split('\n');
+
+            for (let line of lines) {
+                let trimmedLine = line.trim();
+                if (!trimmedLine) continue;
+
+                if (trimmedLine.includes('[terminate]')) {
+                    terminal.innerHTML += `\n\n<span class="system">>> SHUTDOWN SEQUENCE INITIATED...</span>`;
+                    
+                    let targetURL = DEFAULT_URL;
+                    const urlMatch = trimmedLine.match(/\{(.*?)\}/);
+                    if (urlMatch && urlMatch[1]) {
+                        targetURL = urlMatch[1];
+                    }
+
+                    await new Promise(r => setTimeout(r, 2000));
+                    window.location.href = targetURL;
+                    return;
+                }
+
+                if (trimmedLine.startsWith('>')) {
+                    beep.currentTime = 0;
+                    beep.play().catch(() => {});
+                    terminal.innerHTML += `\n${trimmedLine}`;
+                    terminal.scrollTop = terminal.scrollHeight;
+                    await new Promise(r => setTimeout(r, 2500));
+                } else {
+                    terminal.innerHTML += `\n${trimmedLine}`;
+                    terminal.scrollTop = terminal.scrollHeight;
+                    await new Promise(r => setTimeout(r, 150));
+                }
+            }
+        }
+    </script>
+</body>
+</html>
